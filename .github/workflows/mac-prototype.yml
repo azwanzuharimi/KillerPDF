@@ -1,0 +1,25 @@
+name: mac-prototype
+on:
+  push:
+    branches: [mac-avalonia-prototype]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: uname -m
+      - run: dotnet test src/KillerPDF.Avalonia.Tests -c Release
+      - run: dotnet test engine/KillerPdf.Engine.Tests/KillerPdf.Engine.Tests.csproj -c Release --logger "trx;LogFileName=engine.trx" || true
+      - run: src/KillerPDF.Avalonia/package-mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KillerPDF-osx-arm64
+          path: |
+            artifacts/mac/*.dmg
+            src/KillerPDF.Avalonia/bin/mac/*.dmg
+            **/engine.trx
+          if-no-files-found: warn
