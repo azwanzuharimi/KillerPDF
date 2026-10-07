@@ -41,7 +41,7 @@ I built a small macOS app on top of `KillerPdf.Engine`. It opens, renders and ed
 
 The app is signed ad hoc only (`codesign -s -`). It is not notarized, so Gatekeeper blocks a downloaded copy until the user allows it in System Settings.
 
-`Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`. After install, the default PDF app on this Mac stayed Foxit. The app never asks to become the default.
+`Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`. After install, the default PDF app on this Mac stayed the same (another PDF app). The app never asks to become the default.
 
 ### Render speed: `KillerPDF.pdf` (50 pages, scale 1.5)
 
@@ -53,11 +53,11 @@ Headless batch render with the packaged binary, 3 runs. Time is per page in mill
 | 2 | 736 ms | 11 ms | 38 ms | 132 ms | 0.81 s |
 | 3 | 765 ms | 11 ms | 37 ms | 126 ms | 0.84 s |
 
-p95 means 95% of pages render in this time or less. The slowest page is always page 1. It includes first use costs (run time compile, font load).
+p95 means 95% of pages render in this time or less. The slowest page is always page 1. It probably includes first use costs (run time compile, font load).
 
 ### Corpus: KillerPDF-Corpus release v1.8.1
 
-Corpus repo commit `54ecf22f4eb3cb5b8bace6f7a68e57ee01c42b27`, release `v1.8.1`. The full regression set is about 12.5 GB in 10 zip parts. I took three parts that fit in about 1 GB: the standards set, regression part 10 of 10, and the damaged (fuzz) set. I checked each zip against its published SHA-256.
+Corpus repo commit `54ecf22f4eb3cb5b8bace6f7a68e57ee01c42b27`, release `v1.8.1`. The full regression set is about 12.5 GB in 10 zip parts. I took three zips that fit in about 1 GB: the standards set, regression part 10 of 10, and the fuzz set (damaged on purpose). I checked each zip against its published SHA-256.
 
 A "file failure" means the engine could not open the file. A "page failure" means the file opened but one page threw an error. The app shows a message for the first case and a placeholder for the second.
 
@@ -65,7 +65,7 @@ A "file failure" means the engine could not open the file. A "page failure" mean
 |---|---|---|---|---|---|---|---|---|---|
 | Standards | 552 | 41 (7.4%) | 6764 | 26 (0.4%) | 7 | 2 | 38 | 865 | 65 s |
 | Regression part 10 | 5515 | 132 (2.4%) | 31102 | 40 (0.1%) | 40 | 0 | 8 | 1423 | 88 s |
-| Fuzz (damaged on purpose) | 80 | 61 (76%) | 117 | 3 | 3 | 0 | 47 | 142 | 6 s |
+| Fuzz (damaged on purpose) | 80 | 61 (76%) | 117 | 3 | 3 | 0 | 47 | 142 | 5.1 s (80 processes) |
 | Total | 6147 | 234 | 37983 | 69 | 50 | | | | |
 
 Notes:
@@ -76,7 +76,7 @@ Notes:
 - Peak memory of the batch process was 1.6 GB (standards) and 1.4 GB (regression part 10), from `/usr/bin/time -l`. This is the batch command, not the app window. See the memory table for the app.
 - I did not run the same files through the Windows app. I do not know if the Windows build fails on the same files.
 
-Top reasons a file failed to open (standards and regression part 10):
+Top reasons a file failed to open (standards and regression part 10). Rows group files by exact message, except the last row:
 
 | Standards | Regression part 10 | Error |
 |---|---|---|
@@ -88,6 +88,7 @@ Top reasons a file failed to open (standards and regression part 10):
 | 4 | 2 | `InvalidOperationException: The trailer /Root is not an indirect reference.` |
 | 0 | 3 | `InvalidOperationException: The page tree references the same node more than once.` |
 | 2 | 1 | `InvalidOperationException: The document catalog has no /Pages tree.` |
+| 0 | 7 | `PdfSyntaxException: The PDF cross-reference data could not be rebuilt: ...` (all messages that start this way) |
 
 Top reasons a page failed:
 
@@ -119,13 +120,19 @@ Top reasons a page failed:
 | Item | Value |
 |---|---|
 | Cold start (open the `.app` until the first page shows) | Not measured. The Mac screen was locked during this work, so I could not see or time the window. |
+| Open time in the app window | Not measured (screen locked). |
+| Open `KillerPDF.pdf` (`PdfSession.Open`), first open in a new process | 17–24 ms (5 processes) |
+| Open plus render of page 1 at scale 1.5, first open in a new process | 157–175 ms (5 processes) |
+| Same file opened again in the same process: open / open plus page 1 | 2 ms / 54–56 ms |
+
+The last three rows come from a small console program that is not committed. It calls `PdfSession.Open` and `PageRasterizer.Render(0, 1.5)` with a `Stopwatch`, twice in each process. It does not include process start or window creation.
 
 ### Tests
 
 | Suite | Result | Where |
 |---|---|---|
 | Prototype tests (`KillerPDF.Avalonia.Tests`) | 37 passed, 0 failed | Local run and CI run above |
-| Engine tests (`KillerPdf.Engine.Tests`) on macOS arm64 | 4456 passed, 6 failed | Local run and CI run above (macos-15-arm64, job time 3 min 59 s) |
+| Engine tests (`KillerPdf.Engine.Tests`) on macOS arm64 | 4456 passed, 6 failed | Local run and CI run above (runner macos-15 (arm64), job time 3 min 59 s) |
 
 The 6 engine test failures are test issues, not engine issues:
 
@@ -165,10 +172,10 @@ Not checked by eye: the Mac screen was locked for all of this work. So I did not
 ## Findings
 
 1. **Engine tests on macOS.** 6 of 4462 tests fail only because they expect Windows line endings or Windows paths. I did not change any engine test.
-2. **Merge fails when form field names clash.** Merging two PDFs whose form fields have the same name throws `NotSupportedException: Merged AcroForms must have unique field names.` (`engine/KillerPdf.Engine/Editing/PdfIncrementalPageEditor.cs`, line 5755). The Windows app uses the same `AddImportedDocument` path, so I expect the same error there (not tested on Windows). The prototype shows the message and keeps the document unchanged.
-3. **Crash at start while the display sleeps.** One launch while the Mac display was asleep failed with `Avalonia.Native was not able to start the RenderTimer` (error -6661). It happened once. It is in Avalonia's macOS layer, not in the engine.
+2. **Merge fails when form field names clash.** Merging two PDFs whose form fields have the same name throws `NotSupportedException: Merged AcroForms must have unique field names.` (`engine/KillerPdf.Engine/Editing/PdfIncrementalPageEditor.cs`, lines 5754–5755). The Windows app uses the same `AddImportedDocument` path, so I expect the same error there (not tested on Windows). The prototype shows the message and keeps the document unchanged.
+3. **Crash at start while the display sleeps.** Every launch while the Mac display was asleep failed with `Avalonia.Native was not able to start the RenderTimer` (error -6661). This was seen in two separate test sessions. With the display awake, the app starts. The error comes from Avalonia's macOS layer, not from the engine.
 4. **Memory at high zoom on Retina.** Each page bitmap is drawn at full screen resolution. At 500% zoom on a Retina screen one page is about 194 MB, so memory can pass 1 GB. Not measured. A possible fix is to render only the visible part of a page (tiles) at high zoom.
-5. **Corpus.** No crash and no hang over 6147 files. Most open failures are files damaged on purpose. 77 files (12 standards, 65 regression) are encrypted and need a password prompt, which the prototype does not have.
+5. **Corpus.** No crash and no hang over 6147 files. Of the 234 files that did not open: 61 are fuzz files (damaged on purpose), 77 are encrypted standards and regression files (12 + 65) that need a password prompt, which the prototype does not have, and 96 are standards and regression files with structure errors (29 + 67).
 
 ## How to reproduce
 
@@ -200,4 +207,4 @@ $BIN --render-folder /tmp/kp --out /tmp/kp.csv --scale 1.5
 /usr/bin/time -l $BIN --render-folder <unzipped folder> --out corpus.csv --scale 1.5
 ```
 
-CSV columns: `file,page,width,height,ms,error`. Page `-1` means the file did not open.
+CSV columns: `file,page,width,height,ms,error`. Page numbers start at 0. Page `-1` means the file did not open.
