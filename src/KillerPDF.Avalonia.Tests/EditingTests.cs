@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
@@ -177,6 +178,56 @@ public class EditingTests
         window.KeyPress(Key.Z, RawInputModifiers.Meta, PhysicalKey.Z, "z");
         Drop(window, RawInputModifiers.None, second);
         Assert.Equal([200, 250], window.Session!.Pages.Select(p => p.Width));
+    }, CancellationToken.None);
+
+    [Fact]
+    public Task CloseDontSaveKeepsFileBytes() => Headless.Dispatch(() =>
+    {
+        var window = Show();
+        string path = Sample3();
+        byte[] before = File.ReadAllBytes(path);
+        window.OpenFile(path);
+        window.PageList.Selection.SelectedIndex = 0;
+        Click(window.RotateRightButton);
+        window.Close();
+        Answer(window, "Unsaved changes", "Don't Save");
+        Assert.False(window.IsVisible);
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }, CancellationToken.None);
+
+    [Fact]
+    public Task CloseSaveWritesFile() => Headless.Dispatch(() =>
+    {
+        var window = Show();
+        string path = Sample3();
+        window.OpenFile(path);
+        window.PageList.Selection.SelectedIndex = 0;
+        Click(window.RotateRightButton);
+        window.Close();
+        Answer(window, "Unsaved changes", "Save");
+        Assert.False(window.IsVisible);
+        Assert.Equal([90, 0, 0], TestPdf.Rotations(path));
+    }, CancellationToken.None);
+
+    [Fact]
+    public Task ShutdownWhileDirtyIsCancelledAndPrompts() => Headless.Dispatch(() =>
+    {
+        var window = Show();
+        window.OpenFile(Sample3());
+        var clean = new ShutdownRequestedEventArgs();
+        window.OnShutdownRequested(null, clean);
+        Assert.False(clean.Cancel);
+
+        window.PageList.Selection.SelectedIndex = 0;
+        Click(window.RotateRightButton);
+        var dirty = new ShutdownRequestedEventArgs();
+        window.OnShutdownRequested(null, dirty);
+        Assert.True(dirty.Cancel);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(window.OwnedWindows, w => w.Title == "Unsaved changes");
+        Answer(window, "Unsaved changes", "Cancel");
+        Assert.True(window.IsVisible);
+        Assert.True(window.Session!.IsDirty);
     }, CancellationToken.None);
 
     private static string Sample3() => TestPdf.Create(Path.Combine(TestPdf.TempDir(), "three.pdf"), 300, 400, 500);

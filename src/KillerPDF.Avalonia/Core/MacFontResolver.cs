@@ -21,6 +21,11 @@ public sealed class MacFontResolver(IReadOnlyList<string> fontDirectories) : IPd
         {
             if (_cache.TryGetValue(request, out byte[]? cached)) return cached;
             DetectedPdfFontStyle style = PdfFontStyle.FromPdfName(request.PostScriptName);
+            if (Path.GetFileName(style.Family) != style.Family || style.Family.Contains(".."))
+            {
+                _cache[request] = null;
+                return null;
+            }
             string face = (style.Bold, style.Italic) switch
             {
                 (true, true) => " Bold Italic",

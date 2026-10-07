@@ -16,6 +16,7 @@ public partial class App : Application
         {
             var window = new MainWindow();
             desktop.MainWindow = window;
+            desktop.ShutdownRequested += window.OnShutdownRequested;
             string? path = desktop.Args?.FirstOrDefault(a => a.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase));
             if (path is not null) window.Opened += (_, _) => window.OpenFile(path);
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatable)

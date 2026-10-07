@@ -30,7 +30,8 @@ public sealed class PageRasterizer(PdfDocument document)
         (int w, int h) = PixelSize(_pages[pageIndex], ClampScale(_pages[pageIndex], scale));
         var options = new PdfRenderOptions(w, h) { CacheResult = false };
         byte[] pixels = new byte[w * h * 4];
-        IReadOnlyList<string> diagnostics = _renderer.RenderInto(pageIndex, options, pixels, token);
+        IReadOnlyList<string> diagnostics;
+        lock (document) diagnostics = _renderer.RenderInto(pageIndex, options, pixels, token);
         return new RasterPage(w, h, pixels, diagnostics);
     }
 }

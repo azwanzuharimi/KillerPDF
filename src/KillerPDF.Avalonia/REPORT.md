@@ -131,7 +131,7 @@ The last three rows come from a small console program that is not committed. It 
 
 | Suite | Result | Where |
 |---|---|---|
-| Prototype tests (`KillerPDF.Avalonia.Tests`) | 37 passed, 0 failed | Local run and CI run above |
+| Prototype tests (`KillerPDF.Avalonia.Tests`) | 42 passed, 0 failed | Local run (the CI run above had 37, before the last fixes) |
 | Engine tests (`KillerPdf.Engine.Tests`) on macOS arm64 | 4456 passed, 6 failed | Local run and CI run above (runner macos-15 (arm64), job time 3 min 59 s) |
 
 The 6 engine test failures are test issues, not engine issues:
@@ -152,11 +152,11 @@ Checked by unit tests or headless window tests:
 - Rotate, delete, move up and down, merge other PDFs. Delete of every page is refused.
 - Undo and redo (up to 50 steps).
 - Save and Save As. The app writes a temporary file in the same folder, then moves it over the target. If save fails, the open document and the original file do not change.
-- Ask to save on quit, or when another file opens with unsaved changes.
+- Ask to save on quit (window close and Cmd+Q), or when another file opens with unsaved changes.
 - Pages with `/Rotate 90` or `270` render landscape, not stretched.
 - Headless command `--render-folder` that writes one CSV row per page.
 
-Not checked by eye: the Mac screen was locked for all of this work. So I did not see the real native window, the Cmd key shortcuts, the native open and save dialogs, or Finder drag and drop with Option (merge). The code for these exists and the headless tests pass, but a person must try them on a real screen.
+Not checked by eye: the Mac screen was locked for all of this work. So I did not see the real native window, the Cmd key shortcuts, the save prompt on Cmd+Q, the native open and save dialogs, or Finder drag and drop with Option (merge). The code for these exists and the headless tests pass, but a person must try them on a real screen.
 
 ## What is not done
 
@@ -168,6 +168,7 @@ Not checked by eye: the Mac screen was locked for all of this work. So I did not
 - Translations.
 - Windows and Linux builds of this Avalonia app.
 - Intel Mac (`osx-x64`) build.
+- Save writes a new file and renames it over the old one, so file permissions, Finder tags and extended attributes are not kept, and a symlink becomes a normal file.
 
 ## Findings
 

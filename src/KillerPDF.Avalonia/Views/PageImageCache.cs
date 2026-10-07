@@ -68,7 +68,7 @@ public sealed class PageImageCache(ScrollViewer viewer, Control content, Func<in
             string? error = null;
             try
             {
-                lock (rasterizer) page = rasterizer.Render(view.PageIndex, scale, token);
+                page = rasterizer.Render(view.PageIndex, scale, token);
             }
             catch (OperationCanceledException)
             {

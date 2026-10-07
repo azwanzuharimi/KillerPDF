@@ -189,13 +189,20 @@ public partial class MainWindow : Window
 
     private async void OnOpen(object? sender, RoutedEventArgs e)
     {
-        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        try
         {
-            Title = "Open PDF",
-            AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType("PDF") { Patterns = ["*.pdf"] }],
-        });
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path) OpenFile(path);
+            IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Open PDF",
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("PDF") { Patterns = ["*.pdf"] }],
+            });
+            if (files.Count > 0 && files[0].TryGetLocalPath() is { } path) await OpenFileAsync(path);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage("Cannot open file", ex.Message);
+        }
     }
 
     private void OnZoomIn(object? sender, RoutedEventArgs e) => Zoom *= 1.25;

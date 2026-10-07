@@ -33,4 +33,17 @@ public class MacFontResolverTests
         var resolver = new MacFontResolver([TestPdf.TempDir()]);
         Assert.Null(resolver.Resolve(Req("NoSuchFont-Regular")));
     }
+
+    [Fact]
+    public void PathInFontNameReturnsNull()
+    {
+        string root = TestPdf.TempDir();
+        string fonts = Directory.CreateDirectory(Path.Combine(root, "fonts")).FullName;
+        File.WriteAllBytes(Path.Combine(root, "secret.ttf"), [9]);
+        string other = TestPdf.TempDir();
+        File.WriteAllBytes(Path.Combine(other, "secret.ttf"), [8]);
+        var resolver = new MacFontResolver([fonts]);
+        Assert.Null(resolver.Resolve(Req("../secret")));
+        Assert.Null(resolver.Resolve(Req(other + "/secret")));
+    }
 }

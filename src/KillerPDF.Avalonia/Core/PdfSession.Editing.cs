@@ -65,9 +65,13 @@ public sealed partial class PdfSession
 
     private void Apply(Action<PdfIncrementalPageEditor> edit)
     {
-        var editor = new PdfIncrementalPageEditor(Document);
-        edit(editor);
-        byte[] next = editor.Build();
+        byte[] next;
+        lock (Document)
+        {
+            var editor = new PdfIncrementalPageEditor(Document);
+            edit(editor);
+            next = editor.Build();
+        }
         byte[] previous = _bytes;
         Load(next);
         PushUndo(previous);

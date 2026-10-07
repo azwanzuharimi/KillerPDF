@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -82,9 +83,19 @@ public partial class MainWindow
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        if (_closeConfirmed || Session?.IsDirty != true) return;
-        e.Cancel = true;
+        if (HoldClose()) e.Cancel = true;
+    }
+
+    internal void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (HoldClose()) e.Cancel = true;
+    }
+
+    private bool HoldClose()
+    {
+        if (_closeConfirmed || Session?.IsDirty != true) return false;
         if (!_closePrompt) _ = PromptClose();
+        return true;
     }
 
     private async Task PromptClose()
@@ -107,27 +118,41 @@ public partial class MainWindow
     private async void OnSaveAs()
     {
         if (Session is null) return;
-        IStorageFile? file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        try
         {
-            Title = "Save PDF As",
-            SuggestedFileName = Path.GetFileName(Session.FilePath),
-            DefaultExtension = "pdf",
-            FileTypeChoices = [PdfType],
-        });
-        if (file?.TryGetLocalPath() is { } path) SaveDocumentAs(path);
+            IStorageFile? file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save PDF As",
+                SuggestedFileName = Path.GetFileName(Session.FilePath),
+                DefaultExtension = "pdf",
+                FileTypeChoices = [PdfType],
+            });
+            if (file?.TryGetLocalPath() is { } path) SaveDocumentAs(path);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage("Cannot save", ex.Message);
+        }
     }
 
     private async void OnMerge(object? sender, RoutedEventArgs e)
     {
         if (Session is null) return;
-        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        try
         {
-            Title = "Merge PDFs",
-            AllowMultiple = true,
-            FileTypeFilter = [PdfType],
-        });
-        string[] paths = [.. files.Select(f => f.TryGetLocalPath()).OfType<string>()];
-        if (paths.Length > 0) MergeFiles(paths);
+            IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Merge PDFs",
+                AllowMultiple = true,
+                FileTypeFilter = [PdfType],
+            });
+            string[] paths = [.. files.Select(f => f.TryGetLocalPath()).OfType<string>()];
+            if (paths.Length > 0) MergeFiles(paths);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage("Cannot merge", ex.Message);
+        }
     }
 
     private void OnRotateLeft(object? sender, RoutedEventArgs e) => RotatePages(-90);

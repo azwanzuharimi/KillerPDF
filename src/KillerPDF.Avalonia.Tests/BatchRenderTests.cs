@@ -18,4 +18,14 @@ public class BatchRenderTests
         Assert.Equal(2, lines.Count(l => l.StartsWith("good.pdf,")));
         Assert.Contains(lines, l => l.StartsWith("bad.pdf,-1,") && l.Length > "bad.pdf,-1,0,0,0,".Length);
     }
+
+    [Fact]
+    public void FormulaFileNameIsQuotedWithApostrophe()
+    {
+        string dir = TestPdf.TempDir();
+        TestPdf.Create(Path.Combine(dir, "=cmd.pdf"), 100);
+        string csv = Path.Combine(dir, "out.csv");
+        BatchRender.Run(dir, csv, 1, TextWriter.Null);
+        Assert.StartsWith("\"'=cmd.pdf\",0,", File.ReadAllLines(csv)[1]);
+    }
 }

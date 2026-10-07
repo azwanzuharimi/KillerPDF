@@ -45,6 +45,10 @@ public static class BatchRender
     private static string Row(string file, int page, int w, int h, long ms, string error) =>
         string.Join(',', Quote(file), page.ToString(CultureInfo.InvariantCulture), w, h, ms, Quote(error));
 
-    private static string Quote(string value) =>
-        value.IndexOfAny([',', '"', '\n', '\r']) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
+    private static string Quote(string value)
+    {
+        if (value.Length > 0 && value[0] is '=' or '+' or '-' or '@') value = "'" + value;
+        else if (value.IndexOfAny([',', '"', '\n', '\r']) < 0) return value;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
 }
