@@ -1,4 +1,5 @@
 using KillerPdf.Engine.Documents;
+using KillerPdf.Engine.Rendering;
 using KillerPDF.Avalonia.Core;
 
 namespace KillerPDF.Avalonia.Tests;
@@ -11,6 +12,29 @@ public class PageRasterizerTests
         var page = new PdfPageInformation { Width = 200, Height = 100, Rotation = 90 };
         Assert.Equal((200, 400), PageRasterizer.PixelSize(page, 2));
         Assert.Equal((400, 200), PageRasterizer.PixelSize(page with { Rotation = 180 }, 2));
+    }
+
+    [Theory]
+    [InlineData(600, 800, 100)]
+    [InlineData(14400, 14400, 10)]
+    [InlineData(200000, 10, 1)]
+    public void ClampScaleKeepsBitmapInsideEngineLimits(double width, double height, double scale)
+    {
+        var page = new PdfPageInformation { Width = width, Height = height, Rotation = 0 };
+        double clamped = PageRasterizer.ClampScale(page, scale);
+        (int w, int h) = PageRasterizer.PixelSize(page, clamped);
+        Assert.True(clamped < scale);
+        Assert.InRange(w, 1, PdfRenderOptions.MaximumDimension);
+        Assert.InRange(h, 1, PdfRenderOptions.MaximumDimension);
+        Assert.True((long)w * h * 4 <= PdfRenderOptions.MaximumPixelBytes);
+        _ = new PdfRenderOptions(w, h);
+    }
+
+    [Fact]
+    public void ClampScaleKeepsSmallScale()
+    {
+        var page = new PdfPageInformation { Width = 612, Height = 792, Rotation = 0 };
+        Assert.Equal(2.0, PageRasterizer.ClampScale(page, 2.0));
     }
 
     [Fact]

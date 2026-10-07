@@ -17,10 +17,17 @@ public sealed class PageRasterizer(PdfDocument document)
         return page.Rotation is 90 or 270 ? (h, w) : (w, h);
     }
 
+    public static double ClampScale(PdfPageInformation page, double scale)
+    {
+        double bySide = (PdfRenderOptions.MaximumDimension - 1) / Math.Max(page.Width, page.Height);
+        double byBytes = 0.99 * Math.Sqrt(PdfRenderOptions.MaximumPixelBytes / 4.0 / (page.Width * page.Height));
+        return Math.Min(scale, Math.Min(bySide, byBytes));
+    }
+
     public RasterPage Render(int pageIndex, double scale, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        (int w, int h) = PixelSize(_pages[pageIndex], scale);
+        (int w, int h) = PixelSize(_pages[pageIndex], ClampScale(_pages[pageIndex], scale));
         var options = new PdfRenderOptions(w, h) { CacheResult = false };
         byte[] pixels = new byte[w * h * 4];
         IReadOnlyList<string> diagnostics = _renderer.RenderInto(pageIndex, options, pixels, token);

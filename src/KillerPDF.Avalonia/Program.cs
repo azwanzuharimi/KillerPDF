@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using KillerPDF.Avalonia.Core;
 
 namespace KillerPDF.Avalonia;
@@ -22,6 +23,9 @@ internal static class Program
                 ? double.Parse(args[scaleIndex + 1], CultureInfo.InvariantCulture) : 1.5;
             return BatchRender.Run(args[folder + 1], args[outIndex + 1], scale, Console.Out);
         }
-        return 0;
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
+
+    public static AppBuilder BuildAvaloniaApp() =>
+        AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
 }

@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="KillerPDF.Avalonia.Views.MainWindow"
+        Title="KillerPDF" Width="1100" Height="800"
+        Background="{DynamicResource BackgroundBrush}">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="{DynamicResource MenuBackgroundBrush}"
+            BorderBrush="{DynamicResource PaneBorderBrush}" BorderThickness="0,0,0,1" Padding="6">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Content="Open" Click="OnOpen"/>
+        <Border Width="12"/>
+        <Button Content="−" Click="OnZoomOut" ToolTip.Tip="Zoom out"/>
+        <TextBlock x:Name="ZoomText" Text="100%" Width="52" TextAlignment="Center" VerticalAlignment="Center"/>
+        <Button Content="+" Click="OnZoomIn" ToolTip.Tip="Zoom in"/>
+        <Button Content="Fit width" Click="OnFitWidth"/>
+      </StackPanel>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Background="{DynamicResource MenuBackgroundBrush}"
+            BorderBrush="{DynamicResource PaneBorderBrush}" BorderThickness="0,1,0,0" Padding="8,4">
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock x:Name="FileText"/>
+        <TextBlock x:Name="PageText"/>
+        <TextBlock x:Name="DirtyText" Foreground="{DynamicResource SelectionAccent}"/>
+      </StackPanel>
+    </Border>
+    <Border DockPanel.Dock="Left" Width="180" BorderBrush="{DynamicResource PaneBorderBrush}" BorderThickness="0,0,1,0">
+      <ListBox x:Name="PageList" SelectionMode="Multiple" Background="{DynamicResource BackgroundBrush}"
+               SelectionChanged="OnPageSelectionChanged"/>
+    </Border>
+    <ScrollViewer x:Name="Viewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="Pages" Spacing="12" Margin="16" HorizontalAlignment="Center"/>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
