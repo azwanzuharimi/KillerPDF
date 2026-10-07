@@ -20,7 +20,7 @@ public class TestAppBuilder
 public class MainWindowTests(ITestOutputHelper output)
 {
     private static readonly string Sample = Path.Combine(RepoRoot(), "KillerPDF.pdf");
-    private static readonly HeadlessUnitTestSession Headless = HeadlessUnitTestSession.StartNew(typeof(TestAppBuilder));
+    internal static readonly HeadlessUnitTestSession Headless = HeadlessUnitTestSession.StartNew(typeof(TestAppBuilder));
     private static string? Shots => Environment.GetEnvironmentVariable("KP_SHOTS");
 
     [Fact]
@@ -128,7 +128,7 @@ public class MainWindowTests(ITestOutputHelper output)
     private static int FirstVisible(MainWindow window) =>
         window.PageViews.First(v => v.TranslatePoint(default, window.Viewer) is { Y: var y } && y + v.Bounds.Height >= 0).PageIndex + 1;
 
-    private static MainWindow Show()
+    internal static MainWindow Show()
     {
         var window = new MainWindow { Width = 1100, Height = 800 };
         window.Show();
@@ -136,7 +136,7 @@ public class MainWindowTests(ITestOutputHelper output)
         return window;
     }
 
-    private static bool Pump(Func<bool> done)
+    internal static bool Pump(Func<bool> done)
     {
         var watch = Stopwatch.StartNew();
         while (watch.Elapsed < TimeSpan.FromSeconds(30))
@@ -149,7 +149,7 @@ public class MainWindowTests(ITestOutputHelper output)
         return false;
     }
 
-    private static void Save(Window window, string name)
+    internal static void Save(Window window, string name)
     {
         if (Shots is null) return;
         Dispatcher.UIThread.RunJobs();

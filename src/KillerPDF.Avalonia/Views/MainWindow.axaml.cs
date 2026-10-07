@@ -29,6 +29,9 @@ public partial class MainWindow : Window
         Viewer.ScrollChanged += (_, _) => OnPagesScrolled();
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
         Opened += (_, _) => AttachThumbViewer();
+        DragDrop.AddDragOverHandler(this, OnDragOver);
+        DragDrop.AddDropHandler(this, OnDrop);
+        UpdateCommands();
     }
 
     public PdfSession? Session { get; private set; }
@@ -57,8 +60,11 @@ public partial class MainWindow : Window
         }
     }
 
-    public void OpenFile(string path)
+    public void OpenFile(string path) => _ = OpenFileAsync(path);
+
+    public async Task OpenFileAsync(string path)
     {
+        if (!await ConfirmDiscard()) return;
         PdfSession session;
         try
         {
@@ -66,13 +72,12 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _ = ShowMessage("Cannot open file", $"{Path.GetFileName(path)}\n\n{ex.Message}");
+            await ShowMessage("Cannot open file", $"{Path.GetFileName(path)}\n\n{ex.Message}");
             return;
         }
         if (Session is not null) Session.Changed -= OnSessionChanged;
         Session = session;
         Session.Changed += OnSessionChanged;
-        Title = Path.GetFileName(session.FilePath);
         RefreshDocument();
     }
 
@@ -80,6 +85,7 @@ public partial class MainWindow : Window
     {
         if (Session is null) return;
         _rebuilding = true;
+        IReadOnlyList<int> keep = PageList.ItemCount == Session.PageCount ? SelectedPages : [];
         var rasterizer = _rasterizer = new PageRasterizer(Session.Document);
         _pageViews = [.. Enumerable.Range(0, Session.PageCount).Select(i => new PageView(i))];
         _thumbViews = [.. Enumerable.Range(0, Session.PageCount).Select(i => new PageView(i))];
@@ -107,6 +113,7 @@ public partial class MainWindow : Window
                 },
             });
         }
+        foreach (int index in keep) PageList.Selection.Select(index);
         _rebuilding = false;
         UpdateStatus();
         Dispatcher.UIThread.Post(() =>
@@ -154,6 +161,8 @@ public partial class MainWindow : Window
         FileText.Text = Session is null ? "" : Path.GetFileName(Session.FilePath);
         PageText.Text = Session is null ? "" : $"page {_pageCache.FirstVisible + 1} / {Session.PageCount}";
         DirtyText.Text = Session?.IsDirty == true ? "•" : "";
+        if (Session is not null) Title = Path.GetFileName(Session.FilePath);
+        UpdateCommands();
     }
 
     private void ScrollToPage(int index)
@@ -165,7 +174,9 @@ public partial class MainWindow : Window
 
     private void OnPageSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_rebuilding || e.AddedItems.Count == 0) return;
+        if (_rebuilding) return;
+        UpdateCommands();
+        if (e.AddedItems.Count == 0) return;
         ScrollToPage(PageList.Items.IndexOf(e.AddedItems[^1]));
     }
 
@@ -193,36 +204,26 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key is Key.Back or Key.Delete && e.KeyModifiers == KeyModifiers.None && PageList.IsKeyboardFocusWithin)
+        {
+            _ = DeletePages(SelectedPages);
+            e.Handled = true;
+            return;
+        }
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return;
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         switch (e.Key)
         {
             case Key.O: OnOpen(null, e); break;
+            case Key.S when shift: OnSaveAs(); break;
+            case Key.S: if (Session is not null) SaveDocument(); break;
+            case Key.Z when shift: if (Session?.CanRedo == true) OnRedo(null, e); break;
+            case Key.Z: if (Session?.CanUndo == true) OnUndo(null, e); break;
             case Key.OemPlus or Key.Add: Zoom *= 1.25; break;
             case Key.OemMinus or Key.Subtract: Zoom /= 1.25; break;
             case Key.D0 or Key.NumPad0: FitWidth(); break;
             default: return;
         }
         e.Handled = true;
-    }
-
-    private async Task ShowMessage(string title, string message)
-    {
-        var ok = new Button { Content = "OK", HorizontalAlignment = HorizontalAlignment.Right, IsDefault = true };
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(16),
-                Spacing = 12,
-                Children = { new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap }, ok },
-            },
-        };
-        ok.Click += (_, _) => dialog.Close();
-        await dialog.ShowDialog(this);
     }
 }

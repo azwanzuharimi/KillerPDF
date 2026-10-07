@@ -2,17 +2,29 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="KillerPDF.Avalonia.Views.MainWindow"
         Title="KillerPDF" Width="1100" Height="800"
-        Background="{DynamicResource BackgroundBrush}">
+        Background="{DynamicResource BackgroundBrush}" DragDrop.AllowDrop="True">
   <DockPanel>
     <Border DockPanel.Dock="Top" Background="{DynamicResource MenuBackgroundBrush}"
             BorderBrush="{DynamicResource PaneBorderBrush}" BorderThickness="0,0,0,1" Padding="6">
       <StackPanel Orientation="Horizontal" Spacing="4">
         <Button Content="Open" Click="OnOpen"/>
+        <Button x:Name="SaveButton" Content="Save" Click="OnSave"/>
+        <Button x:Name="MergeButton" Content="Merge…" Click="OnMerge"/>
+        <Border Width="12"/>
+        <Button x:Name="RotateLeftButton" Content="Rotate left" Click="OnRotateLeft"/>
+        <Button x:Name="RotateRightButton" Content="Rotate right" Click="OnRotateRight"/>
+        <Border Width="12"/>
+        <Button x:Name="DeleteButton" Content="Delete" Click="OnDelete"/>
+        <Button x:Name="MoveUpButton" Content="Move up" Click="OnMoveUp"/>
+        <Button x:Name="MoveDownButton" Content="Move down" Click="OnMoveDown"/>
         <Border Width="12"/>
         <Button Content="−" Click="OnZoomOut" ToolTip.Tip="Zoom out"/>
         <TextBlock x:Name="ZoomText" Text="100%" Width="52" TextAlignment="Center" VerticalAlignment="Center"/>
         <Button Content="+" Click="OnZoomIn" ToolTip.Tip="Zoom in"/>
         <Button Content="Fit width" Click="OnFitWidth"/>
+        <Border Width="12"/>
+        <Button x:Name="UndoButton" Content="Undo" Click="OnUndo"/>
+        <Button x:Name="RedoButton" Content="Redo" Click="OnRedo"/>
       </StackPanel>
     </Border>
     <Border DockPanel.Dock="Bottom" Background="{DynamicResource MenuBackgroundBrush}"
