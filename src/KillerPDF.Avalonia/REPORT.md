@@ -4,13 +4,28 @@ Date: 2026-10-07, updated 2026-10-08. Draft for the maintainer.
 
 ## Summary
 
-I built a small macOS app on top of `KillerPdf.Engine`. It opens, renders and edits PDF pages on Apple Silicon. It uses no native PDF library: the engine's own renderer draws every page. The engine test suite runs on macOS with 6 failures out of 4462. All 6 come from Windows line endings or Windows paths in the tests.
+- **What this is:** a small macOS app on top of `KillerPdf.Engine`. It opens, renders and edits PDF pages on Apple Silicon.
+- **No native PDF library.** The engine's own renderer draws every page.
+- **Branch:** https://github.com/azwanzuharimi/KillerPDF/tree/mac-avalonia-prototype (based on `dev/1.9-overkill`, v1.9.0)
+- **CI run (macOS arm64):** https://github.com/azwanzuharimi/KillerPDF/actions/runs/37603352769 (CI: the automatic build and test on GitHub)
 
-- Branch: https://github.com/azwanzuharimi/KillerPDF/tree/mac-avalonia-prototype (based on `dev/1.9-overkill`, v1.9.0)
-- CI run (macOS arm64): https://github.com/azwanzuharimi/KillerPDF/actions/runs/37603352769
-- All new code is in `src/KillerPDF.Avalonia/` and `src/KillerPDF.Avalonia.Tests/`, plus one workflow file. No engine file, no WPF file and no version number changed.
+Key results:
 
-## Stack
+| Area | Result |
+|---|---|
+| Engine tests on macOS | 4456 passed, 6 failed (of 4462). All 6 failures come from Windows line endings or Windows paths in the tests. |
+| Prototype tests | 42 passed, 0 failed |
+| Render speed, `KillerPDF.pdf` | Median 11 ms per page |
+| Corpus | 6147 files. No crash and no hang. |
+| Cold start | Median 718 ms |
+| Size | `KillerPDF.app` 173 MB, `.dmg` 73 MB |
+
+## What I built
+
+- All new code is in `src/KillerPDF.Avalonia/` and `src/KillerPDF.Avalonia.Tests/`, plus one workflow file.
+- No engine file, no WPF file and no version number changed.
+
+### Stack
 
 | Part | Choice |
 |---|---|
@@ -18,11 +33,41 @@ I built a small macOS app on top of `KillerPdf.Engine`. It opens, renders and ed
 | Runtime | .NET 10 (SDK 10.0.400), self contained, `osx-arm64` |
 | Rendering | `KillerPdf.Engine` `PdfPageRenderer` into an Avalonia `WriteableBitmap` |
 | Editing | `PdfIncrementalPageEditor` (same code path as the Windows app) |
-| Fonts | Small resolver that maps PDF font names to files in `/System/Library/Fonts` |
+| Fonts | Small resolver. It maps PDF font names to files in `/System/Library/Fonts`. |
 | Native PDF libraries | None (no PDFKit, no PDFium) |
-| Shared Windows code | Only `Services/PdfFontStyle.cs` is linked. `PdfEngineIntegration.cs` is not linked, because it uses `System.Drawing`, which does not work on macOS. |
+| Shared Windows code | Only `Services/PdfFontStyle.cs` is linked. `PdfEngineIntegration.cs` is not linked. It uses `System.Drawing`, which does not work on macOS. |
 
-## Test machine
+"Self contained" means the app includes the .NET runtime.
+
+### Features
+
+Unit tests or headless window tests check these features. "Headless" means the test runs with no visible window.
+
+- Open a PDF. A damaged or encrypted file shows a message. The app stays open.
+- Pages show in one scrolling column, with a page list of thumbnails.
+- Pages render in the background. Old render jobs stop on scroll and zoom.
+- Zoom in, zoom out, fit.
+- Rotate, delete, move up and down, merge other PDFs.
+- The app refuses to delete every page.
+- Undo and redo (up to 50 steps).
+- Save and Save As. The app writes a temporary file in the same folder. Then it moves that file over the target.
+- If save fails, the open document and the original file do not change.
+- Ask to save on quit (window close and Cmd+Q). Also ask when another file opens with unsaved changes.
+- Pages with `/Rotate 90` or `270` render landscape, not stretched.
+- Headless command `--render-folder`. It writes one CSV row per page.
+
+## How to try it
+
+- Build `KillerPDF.app` and the `.dmg` with `src/KillerPDF.Avalonia/package-mac.sh` (see "How to reproduce").
+- The app is signed ad hoc only (`codesign -s -`). Ad hoc: a local signature with no Apple identity.
+- It is not notarized (not checked by Apple). So Gatekeeper blocks a downloaded copy. The user must allow it in System Settings.
+- `Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`.
+- The default PDF app on this Mac stayed the same (another PDF app). This was true after install, and after I opened and used the app.
+- The app never asks to become the default.
+
+## Results
+
+### Test machine
 
 | Item | Value |
 |---|---|
@@ -30,24 +75,27 @@ I built a small macOS app on top of `KillerPdf.Engine`. It opens, renders and ed
 | macOS | 27.0.1 (build 26A434) |
 | Date of runs | 2026-10-07 and 2026-10-08 |
 
-## Numbers
+### Tests
 
-### Package
-
-| Item | Size | Note |
+| Suite | Result | Where |
 |---|---|---|
-| `KillerPDF.app` | 173 MB | Self contained, includes the .NET runtime |
-| `KillerPDF-1.9.0-osx-arm64.dmg` | 73 MB | Compressed disk image |
+| Prototype tests (`KillerPDF.Avalonia.Tests`) | 42 passed, 0 failed | Local run (the CI run above had 37, before the last fixes) |
+| Engine tests (`KillerPdf.Engine.Tests`) on macOS arm64 | 4456 passed, 6 failed | Local run and CI run above (runner macos-15 (arm64), job time 3 min 59 s) |
 
-The app is signed ad hoc only (`codesign -s -`). It is not notarized, so Gatekeeper blocks a downloaded copy until the user allows it in System Settings.
+The 6 engine test failures are test issues, not engine issues:
 
-`Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`. After install, the default PDF app on this Mac stayed the same (another PDF app). The app never asks to become the default.
-
-The default PDF app did not change after the app was opened and used (it is still another PDF app).
+| Count | Cause |
+|---|---|
+| 4 | Test expects Windows line endings (CRLF). macOS writes LF. |
+| 1 | Test expects a Windows path (`C:\input\...`) |
+| 1 | Test expects `..\` (backslash) as the path separator |
 
 ### Render speed: `KillerPDF.pdf` (50 pages, scale 1.5)
 
-Headless batch render with the packaged binary, 3 runs. Time is per page in milliseconds, measured around the engine render call only.
+- Headless batch render with the packaged binary, 3 runs.
+- Time is per page in milliseconds. I measured only the engine render call.
+- p95: 95% of pages render in this time or less.
+- Process wall time: the real clock time of the whole process.
 
 | Run | Sum of page times | Median | p95 | Max | Process wall time |
 |---|---|---|---|---|---|
@@ -55,13 +103,26 @@ Headless batch render with the packaged binary, 3 runs. Time is per page in mill
 | 2 | 736 ms | 11 ms | 38 ms | 132 ms | 0.81 s |
 | 3 | 765 ms | 11 ms | 37 ms | 126 ms | 0.84 s |
 
-p95 means 95% of pages render in this time or less. The slowest page is always page 1. It probably includes first use costs (run time compile, font load).
+The slowest page is always page 1. It probably includes first use costs (run time compile, font load).
 
 ### Corpus: KillerPDF-Corpus release v1.8.1
 
-Corpus repo commit `54ecf22f4eb3cb5b8bace6f7a68e57ee01c42b27`, release `v1.8.1`. The full regression set is about 12.5 GB in 10 zip parts. I took three zips that fit in about 1 GB: the standards set, regression part 10 of 10, and the fuzz set (damaged on purpose). I checked each zip against its published SHA-256.
+A corpus is a large set of test PDF files.
 
-A "file failure" means the engine could not open the file. A "page failure" means the file opened but one page threw an error. The app shows a message for the first case and a placeholder for the second.
+- Corpus repo commit `54ecf22f4eb3cb5b8bace6f7a68e57ee01c42b27`, release `v1.8.1`.
+- The full regression set is about 12.5 GB in 10 zip parts.
+- I took three zips that fit in about 1 GB:
+  - the standards set,
+  - regression part 10 of 10,
+  - the fuzz set (files damaged on purpose).
+- I checked each zip against its published SHA-256 (a file checksum).
+
+Two kinds of failure:
+
+| Term | Meaning | What the app shows |
+|---|---|---|
+| File failure | The engine could not open the file. | A message |
+| Page failure | The file opened, but one page threw an error. | A placeholder for that page |
 
 | Collection | Files | Files that failed to open | Pages | Pages that failed | Files with a failed page | Median ms/page | p95 ms/page | Max ms/page | Wall time |
 |---|---|---|---|---|---|---|---|---|---|
@@ -72,13 +133,15 @@ A "file failure" means the engine could not open the file. A "page failure" mean
 
 Notes:
 
-- Times are whole milliseconds, so a median of 0 means most pages render in under 1 ms (many corpus files are small test files).
-- No file caused a process crash or a hang. Fuzz files ran one process per file with a 30 s limit; none reached the limit.
+- Times are whole milliseconds. A median of 0 means most pages render in under 1 ms. Many corpus files are small test files.
+- No file caused a process crash or a hang.
+- Fuzz files ran one process per file with a 30 s limit. None reached the limit.
 - Fuzz files have a `.fuzz` extension. I copied each one to a `.pdf` name, because `--render-folder` picks only `*.pdf`.
-- Peak memory of the batch process was 1.6 GB (standards) and 1.4 GB (regression part 10), from `/usr/bin/time -l`. This is the batch command, not the app window. See the memory table for the app.
+- Peak memory of the batch process was 1.6 GB (standards) and 1.4 GB (regression part 10), from `/usr/bin/time -l`.
+- This is the batch command, not the app window. See the memory table for the app.
 - I did not run the same files through the Windows app. I do not know if the Windows build fails on the same files.
 
-Top reasons a file failed to open (standards and regression part 10). Rows group files by exact message, except the last row:
+Top reasons a file failed to open (standards and regression part 10). Each row groups files by exact message, except the last row:
 
 | Standards | Regression part 10 | Error |
 |---|---|---|
@@ -106,7 +169,9 @@ Top reasons a page failed:
 | 0 | 3 | `FormatException: JPEG image metadata does not match its PDF dictionary.` |
 | 0 | 2 | `OverflowException: Arithmetic operation resulted in an overflow.` |
 
-### Memory (resident memory, RSS)
+### Memory
+
+RSS (resident memory): the memory the process really uses in RAM.
 
 | Case | RSS | How measured |
 |---|---|---|
@@ -117,7 +182,16 @@ Top reasons a page failed:
 | Page bitmaps kept at one time | 6 or fewer | Only pages in or near the view keep a bitmap |
 | Zoom 500% on a Retina screen | Not measured | One page bitmap at this size is about 194 MB, so a few pages can pass 1 GB |
 
-### Start time
+### Size
+
+| Item | Size | Note |
+|---|---|---|
+| `KillerPDF.app` | 173 MB | Self contained, includes the .NET runtime |
+| `KillerPDF-1.9.0-osx-arm64.dmg` | 73 MB | Compressed disk image |
+
+### Cold start and open time
+
+Cold start: the app starts when it is not already running.
 
 | Item | Value |
 |---|---|
@@ -127,57 +201,44 @@ Top reasons a page failed:
 | Open plus render of page 1 at scale 1.5, first open in a new process | 157–175 ms (5 processes) |
 | Same file opened again in the same process: open / open plus page 1 | 2 ms / 54–56 ms |
 
-Cold start method: quit the app, start `open`, then ask System Events (AppleScript) for the window name about every 50 ms. Each AppleScript call also takes some time, so the true step is a little larger than 50 ms. The time stops when the window with the document title exists, not when the first page is drawn. The app files were in the disk cache, because the app was built just before.
+How I measured the cold start:
 
-The last three rows come from a small console program that is not committed. It calls `PdfSession.Open` and `PageRasterizer.Render(0, 1.5)` with a `Stopwatch`, twice in each process. It does not include process start or window creation.
+- Quit the app. Start `open`.
+- Ask System Events (AppleScript) for the window name about every 50 ms.
+- Each AppleScript call also takes some time. So the true step is a little larger than 50 ms.
+- The time stops when the window with the document title exists. It does not wait for the first page to draw.
+- The app files were in the disk cache, because I built the app just before.
 
-### Tests
+How I measured the last three rows:
 
-| Suite | Result | Where |
+- A small console program, not committed.
+- It calls `PdfSession.Open` and `PageRasterizer.Render(0, 1.5)` with a `Stopwatch`, twice in each process.
+- It does not include process start or window creation.
+
+## What I checked in the real window
+
+- App: the built `KillerPDF.app`, on 2026-10-08.
+- I drove the app with AppleScript (keys, menus, dialog buttons).
+- For Finder drag and drop I used real mouse events (CGEvent).
+- I took screenshots.
+- The first checks ran on the build before the app name fix (commit 9f4ec788).
+- I ran some checks again on the fixed build (commit 3b061681).
+
+| Check | Result | Build |
 |---|---|---|
-| Prototype tests (`KillerPDF.Avalonia.Tests`) | 42 passed, 0 failed | Local run (the CI run above had 37, before the last fixes) |
-| Engine tests (`KillerPdf.Engine.Tests`) on macOS arm64 | 4456 passed, 6 failed | Local run and CI run above (runner macos-15 (arm64), job time 3 min 59 s) |
-
-The 6 engine test failures are test issues, not engine issues:
-
-| Count | Cause |
-|---|---|
-| 4 | Test expects Windows line endings (CRLF); macOS writes LF |
-| 1 | Test expects a Windows path (`C:\input\...`) |
-| 1 | Test expects `..\` (backslash) as the path separator |
-
-## What works
-
-Checked by unit tests or headless window tests:
-
-- Open a PDF. A damaged or encrypted file shows a message; the app stays open.
-- Pages in one scrolling column, with a page list of thumbnails. Pages render in the background. Old render jobs stop on scroll and zoom.
-- Zoom in, zoom out, fit.
-- Rotate, delete, move up and down, merge other PDFs. Delete of every page is refused.
-- Undo and redo (up to 50 steps).
-- Save and Save As. The app writes a temporary file in the same folder, then moves it over the target. If save fails, the open document and the original file do not change.
-- Ask to save on quit (window close and Cmd+Q), or when another file opens with unsaved changes.
-- Pages with `/Rotate 90` or `270` render landscape, not stretched.
-- Headless command `--render-folder` that writes one CSV row per page.
-
-Checked in the real app window (built `KillerPDF.app`, 2026-10-08). These checks ran on the build before the app name fix (commit 9f4ec788). I drove the app with AppleScript (keys, menus, dialog buttons) and real mouse events (CGEvent) for Finder drag and drop, and took screenshots:
-
-- Open with `open -a KillerPDF.app test.pdf` (the same macOS launch path as Finder Open With): the file opens, pages are sharp on the Retina screen, thumbnails show.
-- Rotate right: the page turns; the unsaved marker and Undo update.
-- Cmd+Q with unsaved changes: the prompt "Save changes to test.pdf?" shows Save, Don't Save and Cancel. Cancel keeps the app open and keeps the edit. The file on disk does not change.
-- Cmd+Q with no changes: the app quits with no prompt.
-- Cmd+Shift+S: the native macOS save panel opens. The saved file has 50 pages, and page 1 is 842 x 595 (turned), checked with `--render-folder`.
-- Merge: the native open panel lets the user select only PDF files. The page count goes from 50 to 51.
-- Finder drag with Option held: the dropped file merges, 51 to 52 pages.
-- Finder drag without Option, with unsaved changes: the save prompt shows. Don't Save opens the dropped file; the old file does not change.
-
-On the fixed build (commit 3b061681), I ran these checks again:
-
-- Cmd+Q with unsaved changes: the prompt shows. Cancel keeps the app open and keeps the edit.
-- A second Cmd+Q while the prompt is open does not open a second prompt.
-- Cmd+Q, then Don't Save: the app quits. The file on disk does not change (same checksum).
-- Cmd+Q with no changes: the app quits (the next cold start runs).
-- The menu bar reads "KillerPDF", with the Apple menu and the KillerPDF menu.
+| Open with `open -a KillerPDF.app test.pdf` (the same macOS launch path as Finder Open With) | The file opens. Pages are sharp on the Retina screen. Thumbnails show. | 9f4ec788 |
+| Rotate right | The page turns. The unsaved marker and Undo update. | 9f4ec788 |
+| Cmd+Q with unsaved changes, then Cancel | The prompt "Save changes to test.pdf?" shows Save, Don't Save and Cancel. Cancel keeps the app open and keeps the edit. The file on disk does not change. | 9f4ec788 |
+| Cmd+Q with no changes | The app quits with no prompt. | 9f4ec788 |
+| Cmd+Shift+S | The native macOS save panel opens. The saved file has 50 pages. Page 1 is 842 x 595 (turned), checked with `--render-folder`. | 9f4ec788 |
+| Merge | The native open panel lets the user select only PDF files. The page count goes from 50 to 51. | 9f4ec788 |
+| Finder drag with Option held | The dropped file merges, 51 to 52 pages. | 9f4ec788 |
+| Finder drag without Option, with unsaved changes | The save prompt shows. Don't Save opens the dropped file. The old file does not change. | 9f4ec788 |
+| Cmd+Q with unsaved changes, then Cancel | The prompt shows. Cancel keeps the app open and keeps the edit. | 3b061681 |
+| A second Cmd+Q while the prompt is open | No second prompt opens. | 3b061681 |
+| Cmd+Q, then Don't Save | The app quits. The file on disk does not change (same checksum). | 3b061681 |
+| Cmd+Q with no changes | The app quits. A new launch then starts normally. | 3b061681 |
+| Menu bar name | The menu bar reads "KillerPDF", with the Apple menu and the KillerPDF menu. | 3b061681 |
 
 ## What is not done
 
@@ -189,17 +250,52 @@ On the fixed build (commit 3b061681), I ran these checks again:
 - Translations.
 - Windows and Linux builds of this Avalonia app.
 - Intel Mac (`osx-x64`) build.
-- Save writes a new file and renames it over the old one, so file permissions, Finder tags and extended attributes are not kept, and a symlink becomes a normal file.
+- Save writes a new file and renames it over the old one. Because of this:
+  - the app does not keep file permissions, Finder tags and extended attributes,
+  - a symlink (a link to another file) becomes a normal file.
 
-## Findings
+## Findings for the maintainer
 
-1. **Engine tests on macOS.** 6 of 4462 tests fail only because they expect Windows line endings or Windows paths. I did not change any engine test.
-2. **Merge fails when form field names clash.** Merging two PDFs whose form fields have the same name throws `NotSupportedException: Merged AcroForms must have unique field names.` (`engine/KillerPdf.Engine/Editing/PdfIncrementalPageEditor.cs`, lines 5754–5755). The Windows app uses the same `AddImportedDocument` path, so I expect the same error there (not tested on Windows). The prototype shows the message and keeps the document unchanged.
-3. **Crash at start while the display sleeps.** Every launch while the Mac display was asleep failed with `Avalonia.Native was not able to start the RenderTimer` (error -6661). This was seen in two separate test sessions. With the display awake, the app starts. The error comes from Avalonia's macOS layer, not from the engine.
-4. **Memory at high zoom on Retina.** Each page bitmap is drawn at full screen resolution. At 500% zoom on a Retina screen one page is about 194 MB, so memory can pass 1 GB. Not measured. A possible fix is to render only the visible part of a page (tiles) at high zoom.
-5. **Corpus.** No crash and no hang over 6147 files. Of the 234 files that did not open: 61 are fuzz files (damaged on purpose), 77 are encrypted standards and regression files (12 + 65) that need a password prompt, which the prototype does not have, and 96 are standards and regression files with structure errors (29 + 67).
+1. **Engine tests on macOS.**
+   - 6 of 4462 tests fail.
+   - They fail only because they expect Windows line endings or Windows paths.
+   - I did not change any engine test.
+2. **Merge fails when form field names clash.**
+   - Merge two PDFs whose form fields have the same name. The engine throws `NotSupportedException: Merged AcroForms must have unique field names.`
+   - Source: `engine/KillerPdf.Engine/Editing/PdfIncrementalPageEditor.cs`, lines 5754–5755.
+   - The Windows app uses the same `AddImportedDocument` path. So I expect the same error there (not tested on Windows).
+   - The prototype shows the message and keeps the document unchanged.
+3. **Crash at start while the display sleeps.**
+   - Every launch while the Mac display was asleep failed with `Avalonia.Native was not able to start the RenderTimer` (error -6661).
+   - I saw this in two separate test sessions.
+   - With the display awake, the app starts.
+   - The error comes from Avalonia's macOS layer, not from the engine.
+4. **Memory at high zoom on Retina.**
+   - The app draws each page bitmap at full screen resolution.
+   - At 500% zoom on a Retina screen, one page is about 194 MB. So memory can pass 1 GB.
+   - Not measured.
+   - A possible fix: at high zoom, render only the visible part of a page (tiles).
+5. **Corpus.**
+   - No crash and no hang over 6147 files.
+   - 234 files did not open:
 
-6. **Wrong app name in the menu bar (fixed).** The macOS menu bar showed "Avalonia Application", and the app menu had "About Avalonia", although `Info.plist` sets `CFBundleName` to `KillerPDF`. Avalonia takes this name from `Application.Name`. The fix sets `Name="KillerPDF"` in `App.axaml` and adds an empty `NativeMenu`, so Avalonia does not add its own "About Avalonia" item. The menu bar now shows "KillerPDF", and the app menu has Services, Hide KillerPDF, Hide Others, Show All and Quit. The app menu now starts with an empty separator line, and its Quit item reads only "Quit", not "Quit KillerPDF". Both are cosmetic.
+   | Group | Files |
+   |---|---|
+   | Fuzz files (damaged on purpose) | 61 |
+   | Encrypted standards and regression files (12 + 65). They need a password prompt. The prototype does not have one. | 77 |
+   | Standards and regression files with structure errors (29 + 67) | 96 |
+
+6. **Wrong app name in the menu bar (fixed).**
+   - The macOS menu bar showed "Avalonia Application". The app menu had "About Avalonia".
+   - This happened although `Info.plist` sets `CFBundleName` to `KillerPDF`.
+   - Avalonia takes this name from `Application.Name`.
+   - The fix sets `Name="KillerPDF"` in `App.axaml`.
+   - The fix also adds an empty `NativeMenu`. So Avalonia does not add its own "About Avalonia" item.
+   - The menu bar now shows "KillerPDF".
+   - The app menu has Services, Hide KillerPDF, Hide Others, Show All and Quit.
+   - Two small issues remain. Both are cosmetic:
+     - The app menu now starts with an empty separator line.
+     - Its Quit item reads only "Quit", not "Quit KillerPDF".
 
 ## How to reproduce
 
@@ -231,4 +327,8 @@ $BIN --render-folder /tmp/kp --out /tmp/kp.csv --scale 1.5
 /usr/bin/time -l $BIN --render-folder <unzipped folder> --out corpus.csv --scale 1.5
 ```
 
-CSV columns: `file,page,width,height,ms,error`. Page numbers start at 0. Page `-1` means the file did not open.
+CSV output:
+
+- Columns: `file,page,width,height,ms,error`.
+- Page numbers start at 0.
+- Page `-1` means the file did not open.
