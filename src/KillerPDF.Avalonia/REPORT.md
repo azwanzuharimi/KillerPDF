@@ -1,6 +1,6 @@
 # KillerPDF on macOS: prototype report (for discussion #320)
 
-Date: 2026-10-07. Draft for the maintainer.
+Date: 2026-10-07, updated 2026-10-08. Draft for the maintainer.
 
 ## Summary
 
@@ -28,7 +28,7 @@ I built a small macOS app on top of `KillerPdf.Engine`. It opens, renders and ed
 |---|---|
 | Mac | Mac16,7, Apple M4 Pro, 48 GB memory |
 | macOS | 27.0.1 (build 26A434) |
-| Date of runs | 2026-10-07 |
+| Date of runs | 2026-10-07 and 2026-10-08 |
 
 ## Numbers
 
@@ -119,11 +119,13 @@ Top reasons a page failed:
 
 | Item | Value |
 |---|---|
-| Cold start (open the `.app` until the first page shows) | Not measured. The Mac screen was locked during this work, so I could not see or time the window. |
-| Open time in the app window | Not measured (screen locked). |
+| Cold start (`open -a KillerPDF.app KillerPDF.pdf` until the window with title `KillerPDF.pdf` exists) | Median 718 ms, min 683 ms, max 783 ms (5 runs: 718, 692, 683, 739, 783) |
+| Cold start until the first page pixels show | Not measured |
 | Open `KillerPDF.pdf` (`PdfSession.Open`), first open in a new process | 17–24 ms (5 processes) |
 | Open plus render of page 1 at scale 1.5, first open in a new process | 157–175 ms (5 processes) |
 | Same file opened again in the same process: open / open plus page 1 | 2 ms / 54–56 ms |
+
+Cold start method: quit the app, start `open`, then ask System Events (AppleScript) for the window name about every 50 ms. Each AppleScript call also takes some time, so the true step is a little larger than 50 ms. The time stops when the window with the document title exists, not when the first page is drawn. The app files were in the disk cache, because the app was built just before.
 
 The last three rows come from a small console program that is not committed. It calls `PdfSession.Open` and `PageRasterizer.Render(0, 1.5)` with a `Stopwatch`, twice in each process. It does not include process start or window creation.
 
@@ -156,7 +158,17 @@ Checked by unit tests or headless window tests:
 - Pages with `/Rotate 90` or `270` render landscape, not stretched.
 - Headless command `--render-folder` that writes one CSV row per page.
 
-Not checked by eye: the Mac screen was locked for all of this work. So I did not see the real native window, the Cmd key shortcuts, the save prompt on Cmd+Q, the native open and save dialogs, or Finder drag and drop with Option (merge). The code for these exists and the headless tests pass, but a person must try them on a real screen.
+Checked in the real app window (built `KillerPDF.app`, 2026-10-08). I drove the app with AppleScript (keys, menus, dialog buttons) and real mouse events (CGEvent) for Finder drag and drop, and took screenshots:
+
+- Open from Finder (`open -a KillerPDF.app test.pdf`): the file opens, pages are sharp on the Retina screen, thumbnails show.
+- Rotate right: the page turns; the unsaved marker and Undo update.
+- Cmd+Q with unsaved changes: the prompt "Save changes to test.pdf?" shows Save, Don't Save and Cancel. Cancel keeps the app open and keeps the edit. The file on disk does not change.
+- Cmd+Q with no changes: the app quits with no prompt.
+- Cmd+Shift+S: the native macOS save panel opens. The saved file has 50 pages, and page 1 is 842 x 595 (turned), checked with `--render-folder`.
+- Merge: the native open panel lets the user select only PDF files. The page count goes from 50 to 51.
+- Finder drag with Option held: the dropped file merges, 51 to 52 pages.
+- Finder drag without Option, with unsaved changes: the save prompt shows. Don't Save opens the dropped file; the old file does not change.
+- The menu bar shows "KillerPDF" (after the fix in finding 6).
 
 ## What is not done
 
@@ -177,6 +189,8 @@ Not checked by eye: the Mac screen was locked for all of this work. So I did not
 3. **Crash at start while the display sleeps.** Every launch while the Mac display was asleep failed with `Avalonia.Native was not able to start the RenderTimer` (error -6661). This was seen in two separate test sessions. With the display awake, the app starts. The error comes from Avalonia's macOS layer, not from the engine.
 4. **Memory at high zoom on Retina.** Each page bitmap is drawn at full screen resolution. At 500% zoom on a Retina screen one page is about 194 MB, so memory can pass 1 GB. Not measured. A possible fix is to render only the visible part of a page (tiles) at high zoom.
 5. **Corpus.** No crash and no hang over 6147 files. Of the 234 files that did not open: 61 are fuzz files (damaged on purpose), 77 are encrypted standards and regression files (12 + 65) that need a password prompt, which the prototype does not have, and 96 are standards and regression files with structure errors (29 + 67).
+
+6. **Wrong app name in the menu bar (fixed).** The macOS menu bar showed "Avalonia Application", and the app menu had "About Avalonia", although `Info.plist` sets `CFBundleName` to `KillerPDF`. Avalonia takes this name from `Application.Name`. The fix sets `Name="KillerPDF"` in `App.axaml` and adds an empty `NativeMenu`, so Avalonia does not add its own "About Avalonia" item. The menu bar now shows "KillerPDF", and the app menu has Services, Hide KillerPDF, Hide Others, Show All and Quit. The Quit item text is only "Quit", not "Quit KillerPDF".
 
 ## How to reproduce
 
