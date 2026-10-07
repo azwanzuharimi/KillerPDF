@@ -16,7 +16,7 @@ Out of scope: OCR, print, annotations, forms, signatures, passwords, other theme
 ## Constraints
 
 - No change to any file outside `src/KillerPDF.Avalonia/` and `src/KillerPDF.Avalonia.Tests/`, except one CI workflow file in the fork. The WPF csproj already excludes `src\**`.
-- No linked files from `Services/`. `PdfEngineIntegration.cs` uses `System.Drawing`, which fails on macOS.
+- Link only `Services/PdfFontStyle.cs` (font name parsing, no UI and no `System.Drawing`). Do not link `PdfEngineIntegration.cs`: it uses `System.Drawing`, which fails on macOS.
 - Do not change the version in `KillerPDF.csproj` or the engine csproj. The engine build fails if they differ.
 - `Info.plist` sets `LSHandlerRank` to `Alternate` for PDF. The app must never become the default PDF app.
 
@@ -55,8 +55,9 @@ src/KillerPDF.Avalonia/
 
 ### MacFontResolver
 
-- Maps Arial, Times New Roman, Courier New and their bold/italic faces to files in `/System/Library/Fonts/Supplementary/`.
-- Falls back to a family name search in `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts`.
+- Maps Arial, Times New Roman, Courier New and their bold/italic faces to files in `/System/Library/Fonts/Supplemental/`.
+- Uses `PdfFontStyle.FromPdfName` (linked) to get family, bold and italic from the PostScript name.
+- Falls back to a file name search in `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts`.
 - Returns `null` when no match is found; the engine then uses its own fallback.
 
 ## UI
