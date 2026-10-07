@@ -14,10 +14,10 @@ Key results:
 | Area | Result |
 |---|---|
 | Engine tests on macOS | 4456 passed, 6 failed (of 4462). All 6 failures come from Windows line endings or Windows paths in the tests. |
-| Prototype tests | 42 passed, 0 failed |
+| Prototype tests | 42 passed, 0 failed (local run) |
 | Render speed, `KillerPDF.pdf` | Median 11 ms per page |
-| Corpus | 6147 files. No crash and no hang. |
-| Cold start | Median 718 ms |
+| Corpus | 6147 files from 3 corpus zips. No crash and no hang. |
+| Cold start | Median 718 ms (until the window shows) |
 | Size | `KillerPDF.app` 173 MB, `.dmg` 73 MB |
 
 ## What I built
@@ -60,9 +60,9 @@ Unit tests or headless window tests check these features. "Headless" means the t
 
 - Build `KillerPDF.app` and the `.dmg` with `src/KillerPDF.Avalonia/package-mac.sh` (see "How to reproduce").
 - The app is signed ad hoc only (`codesign -s -`). Ad hoc: a local signature with no Apple identity.
-- It is not notarized (not checked by Apple). So Gatekeeper blocks a downloaded copy. The user must allow it in System Settings.
+- It is not notarized (not sent to Apple for its automatic security check). So Gatekeeper blocks a downloaded copy. The user must allow it in System Settings.
 - `Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`.
-- The default PDF app on this Mac stayed the same (another PDF app). This was true after install, and after I opened and used the app.
+- The default PDF app on this Mac stayed the same (another PDF app). It did not change after install, or after I opened and used the app.
 - The app never asks to become the default.
 
 ## Results
@@ -171,7 +171,7 @@ Top reasons a page failed:
 
 ### Memory
 
-RSS (resident memory): the memory the process really uses in RAM.
+RSS (resident memory): the part of the process memory that is in RAM now.
 
 | Case | RSS | How measured |
 |---|---|---|
@@ -222,7 +222,7 @@ How I measured the last three rows:
 - For Finder drag and drop I used real mouse events (CGEvent).
 - I took screenshots.
 - The first checks ran on the build before the app name fix (commit 9f4ec788).
-- I ran some checks again on the fixed build (commit 3b061681).
+- I ran these checks on the fixed build (commit 3b061681).
 
 | Check | Result | Build |
 |---|---|---|
@@ -237,7 +237,7 @@ How I measured the last three rows:
 | Cmd+Q with unsaved changes, then Cancel | The prompt shows. Cancel keeps the app open and keeps the edit. | 3b061681 |
 | A second Cmd+Q while the prompt is open | No second prompt opens. | 3b061681 |
 | Cmd+Q, then Don't Save | The app quits. The file on disk does not change (same checksum). | 3b061681 |
-| Cmd+Q with no changes | The app quits. A new launch then starts normally. | 3b061681 |
+| Cmd+Q with no changes | The app quits. The next cold start then ran. | 3b061681 |
 | Menu bar name | The menu bar reads "KillerPDF", with the Apple menu and the KillerPDF menu. | 3b061681 |
 
 ## What is not done
@@ -282,13 +282,13 @@ How I measured the last three rows:
    | Group | Files |
    |---|---|
    | Fuzz files (damaged on purpose) | 61 |
-   | Encrypted standards and regression files (12 + 65). They need a password prompt. The prototype does not have one. | 77 |
+   | Encrypted standards and regression files (12 + 65). The prototype has no password prompt. | 77 |
    | Standards and regression files with structure errors (29 + 67) | 96 |
 
 6. **Wrong app name in the menu bar (fixed).**
    - The macOS menu bar showed "Avalonia Application". The app menu had "About Avalonia".
-   - This happened although `Info.plist` sets `CFBundleName` to `KillerPDF`.
-   - Avalonia takes this name from `Application.Name`.
+   - `Info.plist` sets `CFBundleName` to `KillerPDF`.
+   - Avalonia takes the menu bar name from `Application.Name`, not from `Info.plist`.
    - The fix sets `Name="KillerPDF"` in `App.axaml`.
    - The fix also adds an empty `NativeMenu`. So Avalonia does not add its own "About Avalonia" item.
    - The menu bar now shows "KillerPDF".
