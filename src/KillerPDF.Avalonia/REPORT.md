@@ -43,6 +43,8 @@ The app is signed ad hoc only (`codesign -s -`). It is not notarized, so Gatekee
 
 `Info.plist` declares PDF support with `LSHandlerRank` = `Alternate`. After install, the default PDF app on this Mac stayed the same (another PDF app). The app never asks to become the default.
 
+The default PDF app did not change after the app was opened and used (it is still another PDF app).
+
 ### Render speed: `KillerPDF.pdf` (50 pages, scale 1.5)
 
 Headless batch render with the packaged binary, 3 runs. Time is per page in milliseconds, measured around the engine render call only.
@@ -158,9 +160,9 @@ Checked by unit tests or headless window tests:
 - Pages with `/Rotate 90` or `270` render landscape, not stretched.
 - Headless command `--render-folder` that writes one CSV row per page.
 
-Checked in the real app window (built `KillerPDF.app`, 2026-10-08). I drove the app with AppleScript (keys, menus, dialog buttons) and real mouse events (CGEvent) for Finder drag and drop, and took screenshots:
+Checked in the real app window (built `KillerPDF.app`, 2026-10-08). These checks ran on the build before the app name fix (commit 9f4ec788). I drove the app with AppleScript (keys, menus, dialog buttons) and real mouse events (CGEvent) for Finder drag and drop, and took screenshots:
 
-- Open from Finder (`open -a KillerPDF.app test.pdf`): the file opens, pages are sharp on the Retina screen, thumbnails show.
+- Open with `open -a KillerPDF.app test.pdf` (the same macOS launch path as Finder Open With): the file opens, pages are sharp on the Retina screen, thumbnails show.
 - Rotate right: the page turns; the unsaved marker and Undo update.
 - Cmd+Q with unsaved changes: the prompt "Save changes to test.pdf?" shows Save, Don't Save and Cancel. Cancel keeps the app open and keeps the edit. The file on disk does not change.
 - Cmd+Q with no changes: the app quits with no prompt.
@@ -168,7 +170,14 @@ Checked in the real app window (built `KillerPDF.app`, 2026-10-08). I drove the 
 - Merge: the native open panel lets the user select only PDF files. The page count goes from 50 to 51.
 - Finder drag with Option held: the dropped file merges, 51 to 52 pages.
 - Finder drag without Option, with unsaved changes: the save prompt shows. Don't Save opens the dropped file; the old file does not change.
-- The menu bar shows "KillerPDF" (after the fix in finding 6).
+
+On the fixed build (commit 3b061681), I ran these checks again:
+
+- Cmd+Q with unsaved changes: the prompt shows. Cancel keeps the app open and keeps the edit.
+- A second Cmd+Q while the prompt is open does not open a second prompt.
+- Cmd+Q, then Don't Save: the app quits. The file on disk does not change (same checksum).
+- Cmd+Q with no changes: the app quits (the next cold start runs).
+- The menu bar reads "KillerPDF", with the Apple menu and the KillerPDF menu.
 
 ## What is not done
 
@@ -190,7 +199,7 @@ Checked in the real app window (built `KillerPDF.app`, 2026-10-08). I drove the 
 4. **Memory at high zoom on Retina.** Each page bitmap is drawn at full screen resolution. At 500% zoom on a Retina screen one page is about 194 MB, so memory can pass 1 GB. Not measured. A possible fix is to render only the visible part of a page (tiles) at high zoom.
 5. **Corpus.** No crash and no hang over 6147 files. Of the 234 files that did not open: 61 are fuzz files (damaged on purpose), 77 are encrypted standards and regression files (12 + 65) that need a password prompt, which the prototype does not have, and 96 are standards and regression files with structure errors (29 + 67).
 
-6. **Wrong app name in the menu bar (fixed).** The macOS menu bar showed "Avalonia Application", and the app menu had "About Avalonia", although `Info.plist` sets `CFBundleName` to `KillerPDF`. Avalonia takes this name from `Application.Name`. The fix sets `Name="KillerPDF"` in `App.axaml` and adds an empty `NativeMenu`, so Avalonia does not add its own "About Avalonia" item. The menu bar now shows "KillerPDF", and the app menu has Services, Hide KillerPDF, Hide Others, Show All and Quit. The Quit item text is only "Quit", not "Quit KillerPDF".
+6. **Wrong app name in the menu bar (fixed).** The macOS menu bar showed "Avalonia Application", and the app menu had "About Avalonia", although `Info.plist` sets `CFBundleName` to `KillerPDF`. Avalonia takes this name from `Application.Name`. The fix sets `Name="KillerPDF"` in `App.axaml` and adds an empty `NativeMenu`, so Avalonia does not add its own "About Avalonia" item. The menu bar now shows "KillerPDF", and the app menu has Services, Hide KillerPDF, Hide Others, Show All and Quit. The app menu now starts with an empty separator line, and its Quit item reads only "Quit", not "Quit KillerPDF". Both are cosmetic.
 
 ## How to reproduce
 
